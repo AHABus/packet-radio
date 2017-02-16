@@ -20,7 +20,7 @@ static inline void _clearFrame(uint8_t frame[FRAME_SIZE]) {
 // Write a frame using the encoder's write callback.
 static inline bool _writeFrame(RTXEncoder* encoder, uint8_t frame[FRAME_SIZE]) {
     for(uint16_t i = 0; i < FRAME_SIZE; ++i) {
-        if(!encoder->writeCallback(frame[i])) { return false; }
+        if(!encoder->writeCallback(frame[i], encoder->writeData)) { return false; }
     }
     return true;
 }
@@ -77,7 +77,7 @@ static uint8_t _writePacketHeader(RTXPacketHeader* header,
 
 static int16_t _writePacketData(RTXEncoder* encoder, uint8_t offset, uint16_t toWrite, uint8_t frame[FRAME_SIZE]) {
     for(uint16_t i = offset; i < FRAME_DATASIZE && toWrite > 0; ++i) {
-        if(!encoder->readCallback(&frame[i])) { return -1; }
+        if(!encoder->readCallback(&frame[i], encoder->readData)) { return -1; }
         toWrite -= 1;
     }
     return toWrite;
@@ -96,7 +96,6 @@ int16_t rtxEncodePacket(RTXEncoder* encoder, RTXPacketHeader* header) {
     frameOffset += _writeFrameHeader(encoder, frame);
     frameOffset += _writePacketHeader(header, frameOffset, frame);
     toWrite = _writePacketData(encoder, frameOffset, toWrite, frame);
-    // TODO: add FEC
     if(!_writeFrame(encoder, frame)) { return - 1; }
     
     frameCount += 1;
@@ -110,7 +109,5 @@ int16_t rtxEncodePacket(RTXEncoder* encoder, RTXPacketHeader* header) {
         frameCount += 1;
     }
     
-    // TODO: write the Frame's header
     return frameCount;
 }
-

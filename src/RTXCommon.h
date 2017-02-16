@@ -34,8 +34,8 @@ typedef struct {
 
 /// Callback that can be called when a byte of a frame has been encoded.
 /// Returns whether the write was successful or not.
-typedef bool (*RTXWrite)(uint8_t);
+typedef bool (*RTXWrite)(uint8_t, void*);
 
 /// Callback tthat can be called when a byte is required to continue decoding.
 /// Returns true if a byte was read, false otherwise
-typedef bool (*RTXRead)(uint8_t*);
+typedef bool (*RTXRead)(uint8_t*, void*);

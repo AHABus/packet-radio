@@ -9,7 +9,9 @@
 
 typedef struct {
     uint16_t    sequenceNumber;
+    void*       readData;
     RTXRead     readCallback;
+    void*       writeData;
     RTXWrite    writeCallback;
 } RTXEncoder;
 
