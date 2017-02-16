@@ -11,8 +11,10 @@
 #define PROTOCOL_VERSION    0x01
 
 #define FRAME_SIZE          256
+#define FRAME_HEADERSIZE    5
 #define FRAME_DATASIZE      224
 
+#define PACKET_HEADERSIZE   12
 #ifndef PACKET_MAXSIZE
 #define PACKET_MAXSIZE      512
 #endif
@@ -21,8 +23,9 @@
 /// Returns whether the write was successful or not.
 typedef bool (*RTXWrite)(uint8_t, void*);
 
-/// Callback tthat can be called when a byte is required to continue decoding.
-/// Returns true if a byte was read, false otherwise
+/// Callback that can be called when a byte is required to continue decoding.
+/// Returns true if a byte was read, false otherwise.
+/// Should block if no data is available, but is expected.
 typedef bool (*RTXRead)(uint8_t*, void*);
 
 /// Fixed-point 9.23 bit decimal number.

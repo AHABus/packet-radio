@@ -1,0 +1,15 @@
+///
+/// @file        RTXDecoder.h
+/// @brief       AHABus Packet Radio - frame & packet encoding routines
+/// @author      Cesar Parent
+/// @copyright   2017 Cesar Parent
+///
+#pragma once
+#include "RTXCommon.h"
+
+typedef void (*RTXPacketCallback)(RTXPacketHeader*, bool);
+
+// Starts reading a stream of incoming frames, and attempts to decode packets
+// from it. Packet data is sent to the coder's write function, and the packet
+// callback is called every time a full packet has been decoded.
+void rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback);

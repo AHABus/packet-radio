@@ -1,9 +1,10 @@
 ///
-/// @file        RTXCoder.c
+/// @file        RTXEncoder.c
 /// @brief       AHABus Packet Radio - frame & packet encoding routines
 /// @author      Cesar Parent
 /// @copyright   2017 Cesar Parent
 ///
+#include <stdio.h>
 #include "RTXEncoder.h"
 
 #define HIGH16(u16) (((u16) >> 8) & 0x00ff)
@@ -70,7 +71,7 @@ static uint8_t _writePacketHeader(RTXPacketHeader* header,
     // now we now the exact length of the header, we can write the total
     // packet length
     
-    _write16(header->length + idx, lengthField);
+    _write16(header->length + PACKET_HEADERSIZE, lengthField);
     
     return idx;
 }
