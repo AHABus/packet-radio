@@ -1,5 +1,5 @@
 ///
-/// @file        RTXEncoder.c
+/// @file        RTXCoder.c
 /// @brief       AHABus Packet Radio - frame & packet encoding routines
 /// @author      Cesar Parent
 /// @copyright   2017 Cesar Parent
@@ -18,7 +18,7 @@ static inline void _clearFrame(uint8_t frame[FRAME_SIZE]) {
 }
 
 // Write a frame using the encoder's write callback.
-static inline bool _writeFrame(RTXEncoder* encoder, uint8_t frame[FRAME_SIZE]) {
+static inline bool _writeFrame(RTXCoder* encoder, uint8_t frame[FRAME_SIZE]) {
     for(uint16_t i = 0; i < FRAME_SIZE; ++i) {
         if(!encoder->writeCallback(frame[i], encoder->writeData)) { return false; }
     }
@@ -38,7 +38,7 @@ static inline uint8_t _write32(int32_t data, uint8_t* frame) {
     return 4;
 }
 
-static uint8_t _writeFrameHeader(RTXEncoder* encoder, uint8_t frame[FRAME_SIZE]) {
+static uint8_t _writeFrameHeader(RTXCoder* encoder, uint8_t frame[FRAME_SIZE]) {
     uint8_t idx = 0;
     frame[idx++] = 0xAA;
     frame[idx++] = 0x5A;
@@ -75,7 +75,7 @@ static uint8_t _writePacketHeader(RTXPacketHeader* header,
     return idx;
 }
 
-static int16_t _writePacketData(RTXEncoder* encoder, uint8_t offset, uint16_t toWrite, uint8_t frame[FRAME_SIZE]) {
+static int16_t _writePacketData(RTXCoder* encoder, uint8_t offset, uint16_t toWrite, uint8_t frame[FRAME_SIZE]) {
     for(uint16_t i = offset; i < FRAME_DATASIZE && toWrite > 0; ++i) {
         if(!encoder->readCallback(&frame[i], encoder->readData)) { return -1; }
         toWrite -= 1;
@@ -83,7 +83,7 @@ static int16_t _writePacketData(RTXEncoder* encoder, uint8_t offset, uint16_t to
     return toWrite;
 }
 
-int16_t rtxEncodePacket(RTXEncoder* encoder, RTXPacketHeader* header) {
+int16_t rtxEncodePacket(RTXCoder* encoder, RTXPacketHeader* header) {
     
     if(header->length == 0) { return 0; }
     
