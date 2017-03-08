@@ -105,7 +105,7 @@ int16_t rtxEncodePacket(RTXCoder* encoder, RTXPacketHeader* header) {
         frameOffset = 0;
         _clearFrame(frame);
         frameOffset += _writeFrameHeader(encoder, frame);
-        toWrite = _writePacketData(encoder, frameOffset, header->length, frame);
+        toWrite = _writePacketData(encoder, frameOffset, toWrite, frame);
         if(!_writeFrame(encoder, frame)) { return - 1; }
         frameCount += 1;
     }
