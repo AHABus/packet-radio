@@ -6,6 +6,7 @@
 ///
 #include <stdio.h>
 #include "RTXEncoder.h"
+#include "rs8.h"
 
 #define HIGH16(u16) (((u16) >> 8) & 0x00ff)
 #define LOW16(u16)  ((u16) & 0x00ff) 
@@ -78,10 +79,14 @@ static uint8_t _writePacketHeader(RTXPacketHeader* header,
 
 static int16_t _writePacketData(RTXCoder* encoder, uint8_t offset, uint16_t toWrite, uint8_t frame[FRAME_SIZE]) {
     for(uint16_t i = offset; i < FRAME_DATASIZE && toWrite > 0; ++i) {
-        if(!encoder->readCallback(&frame[i], encoder->readData)) { return -1; }
+        if(!encoder->readCallback(&frame[i], encoder->readData)) { return toWrite - 1; }
         toWrite -= 1;
     }
     return toWrite;
+}
+
+static void _writeFEC(uint8_t frame[FRAME_SIZE]) {
+    encode_rs_8(&frame[1], &frame[FRAME_DATASIZE], 0);
 }
 
 int16_t rtxEncodePacket(RTXCoder* encoder, RTXPacketHeader* header) {
@@ -97,6 +102,7 @@ int16_t rtxEncodePacket(RTXCoder* encoder, RTXPacketHeader* header) {
     frameOffset += _writeFrameHeader(encoder, frame);
     frameOffset += _writePacketHeader(header, frameOffset, frame);
     toWrite = _writePacketData(encoder, frameOffset, toWrite, frame);
+    _writeFEC(frame);
     if(!_writeFrame(encoder, frame)) { return - 1; }
     
     frameCount += 1;
@@ -106,6 +112,7 @@ int16_t rtxEncodePacket(RTXCoder* encoder, RTXPacketHeader* header) {
         _clearFrame(frame);
         frameOffset += _writeFrameHeader(encoder, frame);
         toWrite = _writePacketData(encoder, frameOffset, toWrite, frame);
+        _writeFEC(frame);
         if(!_writeFrame(encoder, frame)) { return - 1; }
         frameCount += 1;
     }

@@ -6,6 +6,7 @@
 ///
 #include <stdio.h>
 #include "RTXDecoder.h"
+#include "rs8.h"
 
 static void _clearFrame(uint8_t frame[FRAME_SIZE]) {
     for(uint16_t i = 0; i < FRAME_SIZE; ++i) {
@@ -50,7 +51,6 @@ static bool _readFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
 }
 
 static bool _validateFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
-    // This is mostly going to be FEC cehcking and correction
     uint8_t idx = 0;
     
     if(frame[idx++] != 0xAA) { return false; }
@@ -58,6 +58,7 @@ static bool _validateFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
     if(frame[idx++] != PROTOCOL_VERSION) { return false; }
     
     // Check sequence numbers? reigster dropped packets? discuss.
+    // We don't do FEC here - This 
     
     return true;
 }
@@ -110,21 +111,28 @@ static int32_t _extractDataFrame(RTXCoder* decoder,
     return toRead;
 }
 
+static bool _validateFEC(uint8_t frame[FRAME_SIZE], int padding) {
+    int ret = decode_rs_8(&frame[1], 0, 0, 0);
+    fprintf(stderr, "RET: %d\n", ret);
+    return ret >= 0;
+}
+
 void rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback) {
     
     uint8_t frame[FRAME_SIZE];
     RTXPacketHeader header;
-    int32_t toRead = 0;
-    bool valid = true;
-    int state = 0;  // state:   0: expecting packet header
-                    //          1: packet data
+    int32_t toRead  = 0;
+    bool valid      = true;
+    int state       = 0;    // state:   0: expecting packet header
+                            //          1: packet data
     
     while(true) {
         if(!_readFrame(decoder, frame)) { return;}
+        if(!_validateFEC(frame, 0)) {
+            //valid = false;
+        }
         if(!_validateFrame(decoder, frame)) { return; }
         
-        
-        // TODO: error (dropped frame) recovery.
         switch(state) {
             case 0:
                 toRead = _extractHeaderFrame(decoder, &header, frame);
@@ -137,11 +145,15 @@ void rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback) {
                 break;
         }
         
-        if(toRead <= 0) {
-            valid = toRead == 0;
+        if(toRead == 0) {
             callback(&header, valid);
             state = 0;
-        } else {
+        }
+        else if(toRead < 1) {
+            callback(&header, false);
+            state = 0;
+        }
+        else {
             state = 1;
         }
         state = toRead == 0 ? 0 : 1;
