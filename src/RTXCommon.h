@@ -11,7 +11,7 @@
 #define PROTOCOL_VERSION    0x01
 
 #define FRAME_SIZE          256
-#define FRAME_HEADERSIZE    5
+#define FRAME_HEADERSIZE    4
 #define FRAME_DATASIZE      224
 
 #define PACKET_HEADERSIZE   12

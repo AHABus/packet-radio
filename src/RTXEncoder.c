@@ -21,6 +21,10 @@ static inline void _clearFrame(uint8_t frame[FRAME_SIZE]) {
 
 // Write a frame using the encoder's write callback.
 static inline bool _writeFrame(RTXCoder* encoder, uint8_t frame[FRAME_SIZE]) {
+    // First write one sync byte
+    if(!encoder->writeCallback(0xAA, encoder->writeData)) { return false; }
+    
+    // Then write the frame itself
     for(uint16_t i = 0; i < FRAME_SIZE; ++i) {
         if(!encoder->writeCallback(frame[i], encoder->writeData)) { return false; }
     }
@@ -42,7 +46,6 @@ static inline uint8_t _write32(int32_t data, uint8_t* frame) {
 
 static uint8_t _writeFrameHeader(RTXCoder* encoder, uint8_t frame[FRAME_SIZE]) {
     uint8_t idx = 0;
-    frame[idx++] = 0xAA;
     frame[idx++] = 0x5A;
     frame[idx++] = PROTOCOL_VERSION;
     idx += _write16(encoder->sequenceNumber, &frame[idx]);
@@ -50,7 +53,6 @@ static uint8_t _writeFrameHeader(RTXCoder* encoder, uint8_t frame[FRAME_SIZE]) {
     
     return idx;
 }
-
 
 static uint8_t _writePacketHeader(RTXPacketHeader* header,
                                   uint8_t offset,

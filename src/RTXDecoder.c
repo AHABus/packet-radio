@@ -42,9 +42,8 @@ static bool _wasteUntilSync(RTXCoder* decoder) {
 static bool _readFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
     _clearFrame(frame);
     if(!_wasteUntilSync(decoder)) { return false; }
-    frame[0] = 0xAA;
-    frame[1] = 0x5A;
-    for(uint16_t i = 2; i < FRAME_SIZE; ++i) {
+    frame[0] = 0x5A;
+    for(uint16_t i = 1; i < FRAME_SIZE; ++i) {
         if(!decoder->readCallback(&frame[i], decoder->readData)) { return false; }
     }
     return true;
@@ -52,14 +51,8 @@ static bool _readFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
 
 static bool _validateFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
     uint8_t idx = 0;
-    
-    if(frame[idx++] != 0xAA) { return false; }
     if(frame[idx++] != 0x5A) { return false; }
     if(frame[idx++] != PROTOCOL_VERSION) { return false; }
-    
-    // Check sequence numbers? reigster dropped packets? discuss.
-    // We don't do FEC here - This 
-    
     return true;
 }
 
@@ -111,13 +104,12 @@ static int32_t _extractDataFrame(RTXCoder* decoder,
     return toRead;
 }
 
-static bool _validateFEC(uint8_t frame[FRAME_SIZE], int padding) {
+static bool _validateFEC(uint8_t frame[FRAME_SIZE]) {
     int ret = decode_rs_8(&frame[1], 0, 0, 0);
-    fprintf(stderr, "RET: %d\n", ret);
     return ret >= 0;
 }
 
-void rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback) {
+void fcore_rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback) {
     
     uint8_t frame[FRAME_SIZE];
     RTXPacketHeader header;
@@ -128,8 +120,8 @@ void rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback) {
     
     while(true) {
         if(!_readFrame(decoder, frame)) { return;}
-        if(!_validateFEC(frame, 0)) {
-            //valid = false;
+        if(!_validateFEC(frame)) {
+            valid = false;
         }
         if(!_validateFrame(decoder, frame)) { return; }
         
