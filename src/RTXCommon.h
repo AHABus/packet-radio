@@ -1,14 +1,14 @@
 ///
 /// @file        RTXCommon.h
 /// @brief       AHABus Packet Radio - common includes and functions
-/// @author      Cesar Parent
-/// @copyright   2017 Cesar Parent
+/// @author      Amy Parent
+/// @copyright   2017 Amy Parent
 ///
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
 
-#define PROTOCOL_VERSION    0x01
+#define PROTOCOL_VERSION    0x03
 
 #define FRAME_SIZE          256
 #define FRAME_HEADERSIZE    4
@@ -16,7 +16,7 @@
 
 #define PACKET_HEADERSIZE   12
 #ifndef PACKET_MAXSIZE
-#define PACKET_MAXSIZE      512
+#define PACKET_MAXSIZE      420
 #endif
 
 /// Callback that can be called when a byte of a frame has been encoded.
@@ -26,10 +26,7 @@ typedef bool (*RTXWrite)(uint8_t, void*);
 /// Callback that can be called when a byte is required to continue decoding.
 /// Returns true if a byte was read, false otherwise.
 /// Should block if no data is available, but is expected.
-typedef bool (*RTXRead)(uint8_t*, void*);
-
-/// Fixed-point 9.23 bit decimal number.
-typedef int32_t fp823_t;
+typedef int (*RTXRead)(uint8_t*, void*);
 
 /// Defines the data required to write a packet.
 typedef struct {
@@ -38,8 +35,8 @@ typedef struct {
     uint16_t    length;
     
     /// Secondary Packet Header.
-    fp823_t     latitude;
-    fp823_t     longitude;
+    int32_t     latitude;
+    int32_t     longitude;
     uint16_t    altitude;
 } RTXPacketHeader;
 

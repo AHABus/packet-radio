@@ -1,12 +1,18 @@
 ///
 /// @file        RTXDecoder.c
 /// @brief       AHABus Packet Radio - frame & packet encoding routines
-/// @author      Cesar Parent
-/// @copyright   2017 Cesar Parent
+/// @author      Amy Parent
+/// @copyright   2017 Amy Parent
 ///
 #include <stdio.h>
 #include "RTXDecoder.h"
-#include "rs8.h"
+#include "RTXRS8.h"
+
+uint64_t    receivedBytes       = 0;
+uint64_t    lostBytes           = 0;
+uint64_t    validFrameBytes     = 0;
+uint64_t    invalidFrameBytes   = 0;
+uint64_t    correctedBytes      = 0;
 
 static void _clearFrame(uint8_t frame[FRAME_SIZE]) {
     for(uint16_t i = 0; i < FRAME_SIZE; ++i) {
@@ -14,13 +20,20 @@ static void _clearFrame(uint8_t frame[FRAME_SIZE]) {
     }
 }
 
+static int readCB(uint8_t* byte, RTXCoder* coder) {
+    int retVal = coder->readCallback(byte, coder->readData);
+    if(retVal > 0) {
+        receivedBytes += 1;
+    }
+    return retVal;
+}
 
 static bool _wasteUntilSync(RTXCoder* decoder) {
     int state = 0; // simple state machine. 0 -> waiting, 1 -> 0xaa, 2 -> 0x5a
     uint8_t current = 0x00;
     
     do {
-        if(!decoder->readCallback(&current, decoder->readData)) { return false; }
+        if(readCB(&current, decoder) == 0) { return false; }
         switch(state) {
             case 0:
                 state = current == 0xAA ? 1 : 0;
@@ -36,24 +49,23 @@ static bool _wasteUntilSync(RTXCoder* decoder) {
         }
         
     } while(true);
-    return true;
+    return false;
 }
 
-static bool _readFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
+static int _readFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
     _clearFrame(frame);
-    if(!_wasteUntilSync(decoder)) { return false; }
+    if(!_wasteUntilSync(decoder)) { return 0; }
     frame[0] = 0x5A;
+    
+    int retval = 0;
+    
     for(uint16_t i = 1; i < FRAME_SIZE; ++i) {
-        if(!decoder->readCallback(&frame[i], decoder->readData)) { return false; }
+        retval = readCB(&frame[i], decoder);
+        if(retval != 1) {
+            return retval;
+        }
     }
-    return true;
-}
-
-static bool _validateFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
-    uint8_t idx = 0;
-    if(frame[idx++] != 0x5A) { return false; }
-    if(frame[idx++] != PROTOCOL_VERSION) { return false; }
-    return true;
+    return 1;
 }
 
 static uint8_t _read16(uint16_t* data, uint8_t* frame) {
@@ -74,7 +86,9 @@ static int32_t _extractHeaderFrame(RTXCoder* decoder,
                                     uint8_t frame[FRAME_SIZE]) {
     uint8_t idx = FRAME_HEADERSIZE;
     
-    if(frame[idx++] != PROTOCOL_VERSION) { return -1; }
+    if(frame[idx++] != PROTOCOL_VERSION) {
+        return -1;
+    }
     
     header->payloadID = frame[idx++];
     idx += _read16(&header->length, &frame[idx]);
@@ -87,7 +101,9 @@ static int32_t _extractHeaderFrame(RTXCoder* decoder,
     uint16_t toRead = header->length;
     
     for(; idx < FRAME_DATASIZE && toRead > 0; ++idx) {
-        if(!decoder->writeCallback(frame[idx], decoder->writeData)) { return -1;}
+        if(!decoder->writeCallback(frame[idx], decoder->writeData)) {
+            return -1;
+        }
         toRead -= 1;
     }
     return toRead;
@@ -98,15 +114,44 @@ static int32_t _extractDataFrame(RTXCoder* decoder,
                                   uint8_t frame[FRAME_SIZE]) {
     
     for(uint8_t idx = FRAME_HEADERSIZE; idx < FRAME_DATASIZE && toRead > 0; ++idx) {
-        if(!decoder->writeCallback(frame[idx], decoder->writeData)) { return -1;}
+        if(!decoder->writeCallback(frame[idx], decoder->writeData)) {
+            return -1;
+        }
         toRead -= 1;
     }
     return toRead;
 }
 
 static bool _validateFEC(uint8_t frame[FRAME_SIZE]) {
-    int ret = decode_rs_8(&frame[1], 0, 0, 0);
-    return ret >= 0;
+    int8_t corrected = 0;
+    if((corrected = decode_rs_8(&frame[1], 0, 0, 0)) >= 0) {
+        correctedBytes += corrected;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+static bool _validateFrame(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
+    uint8_t idx = 0;
+    if(frame[idx++] != 0x5A) {
+        return false;
+    }
+    if(frame[idx++] != PROTOCOL_VERSION) {
+        return false;
+    }
+    return true;
+}
+
+static uint16_t _checkLost(RTXCoder* decoder, uint8_t frame[FRAME_SIZE]) {
+    uint16_t sequenceNumber = 0;
+    _read16(&sequenceNumber, &frame[2]);
+    
+    uint32_t expected = (decoder->sequenceNumber + 1) % 65536;
+    uint32_t diff = ((65536 + sequenceNumber - expected) % 65536);
+    
+    decoder->sequenceNumber = sequenceNumber;
+    return diff;
 }
 
 void fcore_rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback) {
@@ -114,16 +159,42 @@ void fcore_rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback) {
     uint8_t frame[FRAME_SIZE];
     RTXPacketHeader header;
     int32_t toRead  = 0;
+    uint16_t lost   = 0;
     bool valid      = true;
     int state       = 0;    // state:   0: expecting packet header
                             //          1: packet data
-    
     while(true) {
-        if(!_readFrame(decoder, frame)) { return;}
+        // Reset for a new packet.
+        valid = true;
+        int retval = _readFrame(decoder, frame);
+        
+        if(retval == 0) {
+            return;
+        }
+        if(retval == -1) {
+            // Frame is too short
+            // TODO: padd the ECC bytes to attempt resolving.
+        }
+        
         if(!_validateFEC(frame)) {
             valid = false;
         }
-        if(!_validateFrame(decoder, frame)) { return; }
+        
+        if(!_validateFrame(decoder, frame)) {
+            valid = false;
+        }
+        
+        lost = _checkLost(decoder, frame);
+        if(valid && lost > 0) {
+            invalidFrameBytes += 256 * lost;
+            if((256 - FRAME_HEADERSIZE) * lost > toRead) {
+                toRead = 0;
+                state = 0;
+            } else {
+                toRead -= (256 - FRAME_HEADERSIZE) * lost;
+                state = 1;
+            }
+        }
         
         switch(state) {
             case 0:
@@ -143,12 +214,19 @@ void fcore_rtxDecodeFrameStream(RTXCoder* decoder, RTXPacketCallback callback) {
         }
         else if(toRead < 1) {
             callback(&header, false);
+            toRead = 0;
             state = 0;
         }
         else {
             state = 1;
         }
-        state = toRead == 0 ? 0 : 1;
         
+        if(valid) {
+            validFrameBytes += 256;
+        } else {
+            invalidFrameBytes += 256;
+        }
+        
+        state = toRead == 0 ? 0 : 1;
     }
 }
